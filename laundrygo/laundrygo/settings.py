@@ -63,9 +63,9 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'laundrygo_db',
         'USER': 'root',
-        'PASSWORD': 'MelM#17',  
+        'PASSWORD': '',  
         'HOST': 'localhost',
-        'PORT': '3307',
+        'PORT': '3306',
         'OPTIONS': {
             'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
         },

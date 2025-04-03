@@ -17,6 +17,19 @@ from django.template.loader import get_template
 from django.db import transaction
 import logging
 
+from django.forms.models import model_to_dict
+from django.db.models import F
+import json
+from decimal import Decimal
+from django.core.serializers.json import DjangoJSONEncoder
+
+
+class DecimalEncoder(DjangoJSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)  # Convert Decimal to float
+        return super().default(obj)
+
 logger = logging.getLogger(__name__)
 def home(request):
     if request.user.is_authenticated and request.user.user_type == 'customer':
@@ -133,6 +146,7 @@ def launderer_detail(request, launderer_id):
 
 @login_required
 def scheduling(request, launderer_id=None):
+    cloth_items_json = "[]"
     if request.method == 'POST':
         form = OrderForm(request.POST)
         if form.is_valid():
@@ -140,7 +154,10 @@ def scheduling(request, launderer_id=None):
                 with transaction.atomic():
                     # Create the order with initial status "Pending Acceptance"
                     order = form.save(commit=False)
-                    order.customer = request.user.customer
+                    # order.customer = request.user.customer
+                    order.customer = request.user
+                    order.total_amount = items_subtotal + final_delivery_charge
+                    # order.sub_total = items_subtotal
                     
                     if launderer_id:
                         try:
@@ -180,15 +197,20 @@ def scheduling(request, launderer_id=None):
                         OrderItem.objects.create(
                             order=order,
                             item_type=item_data['item_type'],
-                            quantity=item_data['quantity']
+                            quantity=item_data['quantity'],
+                            subtotal=item_data['quantity'] * cloth_items[item_data['item_type']]['price'],
                         )
                     
                     messages.success(request, "Your order has been placed successfully! It will be confirmed once the launderer accepts it.")
                     return redirect('customer:order_details', order_id=order.id)
             except Exception as e:
                 logger.error(f"Error creating order: {str(e)}")
+                print("Error creating order - ************************** ")
+                print(str(e))
                 messages.error(request, f"An error occurred while placing your order: {str(e)}")
         else:
+            print("**************************")
+            print("Form errors:", form.errors)
             logger.error(f"Form validation errors: {form.errors}")
             messages.error(request, "Please correct the errors in the form.")
     else:
@@ -197,6 +219,23 @@ def scheduling(request, launderer_id=None):
             try:
                 launderer = Launderer.objects.get(id=launderer_id)
                 form.fields['launderer'].initial = launderer.id
+                cloth_items = ClothItem.objects.filter(launderer=launderer).annotate(cloth_type_name=F('cloth_type__name')).values('id', 'cloth_name', 'service_type', 'price', 'cloth_type_name')
+                cloth_items_json = json.dumps(list(cloth_items.values()), cls=DecimalEncoder)
+                # # Get available services for this launderer
+                available_services = set()
+    
+                for item in cloth_items:
+                    if item['service_type']:
+                        available_services.add(item['service_type'])
+                    else:
+                        available_services.update([choice[0] for choice in Order.SERVICE_CHOICES])
+                return render(request, 'customer/scheduling.html', {
+                    'form': form,
+                    'launderer': launderer,
+                    'cloth_items': cloth_items,
+                    'cloth_items_json': cloth_items_json,
+                    'available_services': available_services,
+                })
             except Launderer.DoesNotExist:
                 messages.error(request, "Selected launderer does not exist.")
                 return redirect('customer:scheduling')
@@ -205,22 +244,12 @@ def scheduling(request, launderer_id=None):
     # print("launderers : ", launderers)
     # print(available_services)
 
-    # launderer = get_object_or_404(Launderer, id=launderer_id)
-    cloth_items = ClothItem.objects.filter(launderer=launderer)
-    # Get available services for this launderer
-    available_services = set()
-    
-    for item in cloth_items:
-        if item.service_type:
-            available_services.add(item.service_type)
-        else:
-            # If no specific service type is set, assume it's available for all services
-            available_services.update([choice[0] for choice in Order.SERVICE_CHOICES])
+
     return render(request, 'customer/scheduling.html', {
         'form': form,
         'launderers': launderers,
-        'cloth_items': cloth_items,
-        'available_services': available_services,
+        # 'cloth_items': cloth_items,
+        # 'available_services': available_services,
     })
 
 @login_required

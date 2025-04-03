@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, PasswordResetForm, SetPasswordForm
-from .models import User, Order, Review, CustomerSupport
+from .models import User, Order, Review, CustomerSupport, Launderer
 from django.utils import timezone
 
 class CustomerRegistrationForm(UserCreationForm):
@@ -44,6 +44,10 @@ class CustomerProfileUpdateForm(forms.ModelForm):
                 #  'latitude', 'longitude', 'delivery_instructions'
                  ]
 class OrderForm(forms.ModelForm):
+    launderer = forms.ModelChoiceField(
+        queryset=Launderer.objects.all(),  # Ensure it has all choices
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
     class Meta:
         model = Order
         fields = ['launderer', 'service_type', 'pickup_delivery', 'pickup_date', 'pickup_slot', 

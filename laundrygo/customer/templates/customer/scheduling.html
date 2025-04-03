@@ -500,6 +500,8 @@
         <input type="hidden" name="items_data" id="itemsData" value="">
         <input type="hidden" name="selected_services" id="selectedServicesInput" value="">
         <input type="hidden" name="selected_address_id" id="selectedAddressId" value="{{ user.id }}">
+        <input type="hidden" name="launderer" id="" value="{{ launderer.id }}">
+        <input type="hidden" name="total_amount" id="total_amount" value="">
         
         <!-- Service Selection Section -->
         <div class="services-section">
@@ -508,9 +510,9 @@
                 {% for service_code, service_name in form.fields.service_type.choices %}
                     {% if service_code in available_services %}
                     <label class="service-card cust-2" data-service="{{ service_code }}">
-                        <p>Checking: {{ service_code }}</p>
-                        <p>Checking: {{ available_services }}</p>
-                        <input type="checkbox" name="service_types" value="{{ service_code }}" class="service-checkbox">
+                        <!-- <p>Checking: {{ service_code }}</p>
+                        <p>Checking: {{ available_services }}</p> -->
+                        <input type="checkbox" name="service_type" value="{{ service_code }}" class="service-checkbox">
                         <span class="service-icon">
                             {% if service_code == 'washing' %}
                                 <i class="fas fa-tshirt"></i>
@@ -537,8 +539,8 @@
                     </label>
                     {% else %}
                     <div class="service-card service-unavailable">
-                        <p>Checking: {{ service_code }}</p>
-                        <p>Checking: {{ available_services }}</p>
+                        <!-- <p>Checking: {{ service_code }}</p>
+                        <p>Checking: {{ available_services }}</p> -->
                         <span class="service-icon">
                             {% if service_code == 'washing' %}
                                 <i class="fas fa-tshirt"></i>
@@ -769,7 +771,8 @@
         const totalAmountEl = document.getElementById('totalAmount');
         
         // Delivery charge from backend
-        const deliveryCharge = parseFloat('{{ delivery_charge }}');
+        const deliveryCharge = parseFloat('{{ launderer.base_delivery_charge }}');
+        // const deliveryCharge = parseFloat(100);
         
         // Min order for free delivery
         const minOrderFreeDelivery = parseFloat('{{ launderer.min_order_free_delivery }}');
@@ -1074,6 +1077,38 @@
             
             // Set the items data
             itemsDataInput.value = JSON.stringify(selectedItems);
+
+            // checkboxes = document.querySelectorAll('.item-checkbox');
+            // quantityInputs = document.querySelectorAll('.quantity-input');
+            
+            let itemsSubtotal = 0;
+            
+            // Calculate items subtotal
+            checkboxes.forEach((checkbox, index) => {
+                if (checkbox.checked) {
+                    const price = parseFloat(quantityInputs[index].dataset.price);
+                    const quantity = parseInt(quantityInputs[index].value);
+                    itemsSubtotal += price * quantity;
+                }
+            });
+            
+            // Update delivery charge based on order total and pickup/delivery option
+            let finalDeliveryCharge = 0;
+            const pickupDeliveryOption = document.querySelector('.pickup-radio:checked').value;
+            
+            if (pickupDeliveryOption === 'pickup' || pickupDeliveryOption === 'both') {
+                // Apply free delivery if order exceeds minimum
+                if (itemsSubtotal >= minOrderFreeDelivery) {
+                    finalDeliveryCharge = 0;
+                } else {
+                    finalDeliveryCharge = deliveryCharge;
+                }
+            }
+            
+            // Update summary display
+            itemsSubtotalEl.textContent = `₹${itemsSubtotal.toFixed(2)}`;
+            deliveryChargeEl.textContent = `₹${finalDeliveryCharge.toFixed(2)}`;
+            totalAmountEl.textContent = `₹${(itemsSubtotal + finalDeliveryCharge).toFixed(2)}`;
             
             // Log form data for debugging
             console.log("Form data:", {
@@ -1083,8 +1118,14 @@
                 pickupDate: pickupDate,
                 deliveryDate: deliveryDate,
                 pickupSlot: pickupSlot,
-                paymentMethod: paymentMethod
+                paymentMethod: paymentMethod,
+                total_amount: (itemsSubtotal + finalDeliveryCharge).toFixed(2)
             });
+
+            document.getElementById('total_amount').value = (itemsSubtotal + finalDeliveryCharge).toFixed(2);
+            // $("#total_amount").val();
+
+            // return;
             
             // Submit the form
             form.submit();
